@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTransaction(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 80 &&
+             data.amount is int && data.amount > 0 && data.amount <= 1000000000000 &&
+             data.type is string && data.type in ['EXPENSE', 'INCOME'] &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 40 &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 200)) &&
+             data.occurredAtEpochMs is int && data.occurredAtEpochMs > 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSavingsGoal(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+             data.targetAmount is int && data.targetAmount > 0 && data.targetAmount <= 1000000000000 &&
+             data.currentAmount is int && data.currentAmount >= 0 && data.currentAmount <= 1000000000000 &&
+             data.iconKey is string && data.iconKey.size() >= 1 && data.iconKey.size() <= 30 &&
+             data.colorHex is string && data.colorHex.size() >= 4 && data.colorHex.size() <= 16 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSavingsLog(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             isValidId(data.goalId) &&
+             data.goalName is string && data.goalName.size() >= 1 && data.goalName.size() <= 60 &&
+             data.amount is int && data.amount > 0 && data.amount <= 1000000000000 &&
+             data.actionType is string && data.actionType in ['DEPOSIT', 'WITHDRAW'] &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 200)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidMonthlyBudget(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 40 &&
+             data.limitAmount is int && data.limitAmount > 0 && data.limitAmount <= 1000000000000 &&
+             data.monthKey is string && data.monthKey.size() == 7 && data.monthKey.matches('^[0-9]{4}-[0-9]{2}$') &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId} {
+      // Transactions subcollection
+      match /transactions/{transactionId} {
+        allow get: if isOwner(userId) && isValidId(transactionId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(transactionId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'amount', 'type', 'category', 'occurredAtEpochMs', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'amount', 'type', 'category', 'note', 'occurredAtEpochMs', 'createdAt', 'updatedAt']) &&
+                         isValidTransaction(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(transactionId) &&
+                         isValidTransaction(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'amount', 'type', 'category', 'note', 'occurredAtEpochMs', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(transactionId);
+      }
+
+      // Savings Goals subcollection
+      match /savingsGoals/{goalId} {
+        allow get: if isOwner(userId) && isValidId(goalId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(goalId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'targetAmount', 'currentAmount', 'iconKey', 'colorHex', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'targetAmount', 'currentAmount', 'iconKey', 'colorHex', 'createdAt', 'updatedAt']) &&
+                         isValidSavingsGoal(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(goalId) &&
+                         isValidSavingsGoal(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         (
+                           incoming().diff(existing()).affectedKeys().hasOnly(['name', 'targetAmount', 'iconKey', 'colorHex', 'updatedAt']) ||
+                           incoming().diff(existing()).affectedKeys().hasOnly(['currentAmount', 'updatedAt'])
+                         );
+
+        allow delete: if isOwner(userId) && isValidId(goalId);
+      }
+
+      // Savings Logs subcollection
+      match /savingsLogs/{logId} {
+        allow get: if isOwner(userId) && isValidId(logId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(logId) &&
+                         incoming().keys().hasAll(['userId', 'goalId', 'goalName', 'amount', 'actionType', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'goalId', 'goalName', 'amount', 'actionType', 'note', 'createdAt']) &&
+                         isValidSavingsLog(incoming(), userId) &&
+                         existsAfter(/databases/$(database)/documents/users/$(userId)/savingsGoals/$(incoming().goalId));
+
+        allow update: if false;
+
+        allow delete: if isOwner(userId) && isValidId(logId);
+      }
+
+      // Monthly Budgets subcollection
+      match /budgets/{budgetId} {
+        allow get: if isOwner(userId) && isValidId(budgetId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(budgetId) &&
+                         incoming().keys().hasAll(['userId', 'category', 'limitAmount', 'monthKey', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'category', 'limitAmount', 'monthKey', 'createdAt', 'updatedAt']) &&
+                         isValidMonthlyBudget(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(budgetId) &&
+                         isValidMonthlyBudget(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().monthKey == existing().monthKey &&
+                         incoming().category == existing().category &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['limitAmount', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(budgetId);
+      }
+    }
+  }
+}

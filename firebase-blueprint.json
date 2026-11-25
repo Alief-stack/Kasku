@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Personal expense or income record scoped to a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "title": {
+          "type": "string",
+          "description": "Short description of the expense or income."
+        },
+        "amount": {
+          "type": "integer",
+          "description": "Positive integer amount in IDR (Rupiah)."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["EXPENSE", "INCOME"],
+          "description": "Transaction direction."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category label such as Makanan, Transportasi, Tagihan, Belanja, Kesehatan, Hiburan, Gaji, Lainnya."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional note."
+        },
+        "occurredAtEpochMs": {
+          "type": "integer",
+          "description": "Transaction occurrence time in epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "title", "amount", "type", "category", "occurredAtEpochMs", "createdAt", "updatedAt"]
+    },
+    "SavingsGoal": {
+      "title": "SavingsGoal",
+      "description": "Personal savings vault / pocket with target and current balance.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the savings pocket."
+        },
+        "targetAmount": {
+          "type": "integer",
+          "description": "Target savings goal in IDR."
+        },
+        "currentAmount": {
+          "type": "integer",
+          "description": "Current saved amount in IDR."
+        },
+        "iconKey": {
+          "type": "string",
+          "description": "Icon identifier for UI rendering."
+        },
+        "colorHex": {
+          "type": "string",
+          "description": "Accent hex color string."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "name", "targetAmount", "currentAmount", "iconKey", "colorHex", "createdAt", "updatedAt"]
+    },
+    "SavingsLog": {
+      "title": "SavingsLog",
+      "description": "Deposit or withdrawal entry for a savings pocket.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "goalId": {
+          "type": "string",
+          "description": "Parent savingsGoal document ID."
+        },
+        "goalName": {
+          "type": "string",
+          "description": "Snapshot name of the savings pocket."
+        },
+        "amount": {
+          "type": "integer",
+          "description": "Positive integer amount deposited or withdrawn in IDR."
+        },
+        "actionType": {
+          "type": "string",
+          "enum": ["DEPOSIT", "WITHDRAW"],
+          "description": "Deposit or withdrawal action."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional note."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "goalId", "goalName", "amount", "actionType", "createdAt"]
+    },
+    "MonthlyBudget": {
+      "title": "MonthlyBudget",
+      "description": "Monthly spending cap per expense category.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "category": {
+          "type": "string",
+          "description": "Expense category name."
+        },
+        "limitAmount": {
+          "type": "integer",
+          "description": "Monthly spending cap in IDR."
+        },
+        "monthKey": {
+          "type": "string",
+          "description": "Month identifier formatted as YYYY-MM."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "category", "limitAmount", "monthKey", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": {
+        "$ref": "#/entities/Transaction"
+      },
+      "description": "User-scoped personal expense and income ledger entries."
+    },
+    "/users/{userId}/savingsGoals/{goalId}": {
+      "schema": {
+        "$ref": "#/entities/SavingsGoal"
+      },
+      "description": "User-scoped personal savings pockets and targets."
+    },
+    "/users/{userId}/savingsLogs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/SavingsLog"
+      },
+      "description": "User-scoped deposit and withdrawal audit logs for savings pockets."
+    },
+    "/users/{userId}/budgets/{budgetId}": {
+      "schema": {
+        "$ref": "#/entities/MonthlyBudget"
+      },
+      "description": "User-scoped monthly category budget caps."
+    }
+  }
+}
